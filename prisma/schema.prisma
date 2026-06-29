@@ -1,0 +1,160 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model user {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  password   String
+  jwt        String
+  lastLogin  DateTime @default(now())
+  createdAt  DateTime @default(now())
+  roles      String   @default("student")
+  mobile     String   @unique
+  first_name String
+  last_name  String
+  is_active  Boolean  @default(true)
+  address    String
+
+  student student?
+}
+
+model student {
+  call_up_no    String @id
+  school        String
+  parent_name   String
+  parent_mobile String
+
+  user_id String @unique
+  user    user   @relation(fields: [user_id], references: [id])
+
+  batch_id String
+  batch    batch  @relation(fields: [batch_id], references: [id])
+
+  attendance    attendance[]
+  payment       payment[]
+  student_marks student_marks[]
+}
+
+model batch {
+  id         String   @id
+  name       String
+  exam_date  DateTime
+  class_fee  Float
+  is_active  Boolean  @default(true)
+  start_time String
+  end_time   String
+  created_at DateTime @default(now())
+
+  student      student[]
+  class_day_id class_day[]
+  paper        paper[]
+  material_access material_access[]
+}
+
+model class_day {
+  id   String   @id
+  date DateTime
+
+  batch_id String
+  batch    batch  @relation(fields: [batch_id], references: [id])
+
+  attendance attendance[]
+}
+
+model attendance {
+  id      String   @id @default(cuid())
+  time_in DateTime
+
+  call_up_no String
+  student    student @relation(fields: [call_up_no], references: [call_up_no])
+
+  class_day_id String
+  class_day    class_day @relation(fields: [class_day_id], references: [id])
+}
+
+model payment {
+  id           String   @id @default(cuid())
+  amount       Float
+  payment_date DateTime
+  month        String
+
+  call_up_no String
+  student    student @relation(fields: [call_up_no], references: [call_up_no])
+}
+
+model paper {
+  id               String   @id @default(cuid())
+  paper_name       String
+  paper_date       DateTime
+  avg_marks        Float
+  is_mark_released Boolean  @default(false)
+  created_at       DateTime @default(now())
+
+  batch_id String
+  batch    batch  @relation(fields: [batch_id], references: [id])
+
+  material_id String
+  material    material @relation(fields: [material_id], references: [id])
+
+  student_marks student_marks[]
+}
+
+model student_marks {
+  id         String   @id @default(cuid())
+  marks      Float
+  comments   String?  @default("none")
+  created_at DateTime @default(now())
+
+  call_up_no String
+  student    student @relation(fields: [call_up_no], references: [call_up_no])
+
+  paper_id String
+  paper    paper  @relation(fields: [paper_id], references: [id])
+}
+
+model material {
+  id           String @id @default(cuid())
+  title        String
+  description  String
+  material_url String
+  type         String
+
+  lesson_id    String
+  lesson       lesson @relation(fields: [lesson_id], references: [id])
+
+  paper paper[]
+  material_access material_access[]
+}
+
+enum lesson_type{
+  PURE
+  APPLIES
+  COMMON
+}
+
+model lesson {
+  id          String   @id @default(cuid())
+  title       String @unique
+  description String?
+  type        lesson_type @default(COMMON)
+  created_at  DateTime @default(now())
+
+  material material[]
+}
+
+model material_access {
+  id          String   @id @default(cuid())
+  expiry_date DateTime
+  created_at  DateTime @default(now())
+
+  batch_id    String
+  batch       batch @relation(fields: [batch_id], references: [id])
+
+  material_id String
+  material    material @relation(fields: [material_id], references: [id])
+}
