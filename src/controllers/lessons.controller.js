@@ -31,6 +31,8 @@ const newLessonController = async (req, res) => {
 const updateLessonController = async (req, res) => {
     try {
         const lessonId = req.params.id;
+        console.log("update body " + JSON.stringify(req.body));
+
         const lesson = await updateLesson(lessonId, req.body);
         sendResponse(res, lesson);
         return;

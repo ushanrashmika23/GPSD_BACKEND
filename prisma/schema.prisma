@@ -133,7 +133,7 @@ model material {
 
 enum lesson_type{
   PURE
-  APPLIES
+  APPLIED
   COMMON
 }
 
