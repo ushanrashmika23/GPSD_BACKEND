@@ -13,6 +13,8 @@ app.use(express.json());
 
 const lessonsRoute = require("./routes/lessons.route");
 app.use("/api/lessons", lessonsRoute);
+const batchRoute = require("./routes/batch.route");
+app.use("/api/batches", batchRoute);
 
 app.get("/", (req, res) => {
     res.json({

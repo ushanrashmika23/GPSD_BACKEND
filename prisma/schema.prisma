@@ -41,18 +41,19 @@ model student {
 }
 
 model batch {
-  id         String   @id
+  id         String   @id @default(cuid())
   name       String
   exam_date  DateTime
   class_fee  Float
   is_active  Boolean  @default(true)
   start_time String
   end_time   String
+  day        String
   created_at DateTime @default(now())
 
-  student      student[]
-  class_day_id class_day[]
-  paper        paper[]
+  student         student[]
+  class_day_id    class_day[]
+  paper           paper[]
   material_access material_access[]
 }
 
@@ -124,25 +125,25 @@ model material {
   material_url String
   type         String
 
-  lesson_id    String
-  lesson       lesson @relation(fields: [lesson_id], references: [id])
+  lesson_id String
+  lesson    lesson @relation(fields: [lesson_id], references: [id])
 
-  paper paper[]
+  paper           paper[]
   material_access material_access[]
 }
 
-enum lesson_type{
+enum lesson_type {
   PURE
   APPLIED
   COMMON
 }
 
 model lesson {
-  id          String   @id @default(cuid())
-  title       String @unique
+  id          String      @id @default(cuid())
+  title       String      @unique
   description String?
   type        lesson_type @default(COMMON)
-  created_at  DateTime @default(now())
+  created_at  DateTime    @default(now())
 
   material material[]
 }
@@ -152,8 +153,8 @@ model material_access {
   expiry_date DateTime
   created_at  DateTime @default(now())
 
-  batch_id    String
-  batch       batch @relation(fields: [batch_id], references: [id])
+  batch_id String
+  batch    batch  @relation(fields: [batch_id], references: [id])
 
   material_id String
   material    material @relation(fields: [material_id], references: [id])

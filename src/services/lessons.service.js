@@ -45,15 +45,12 @@ const deleteLesson = async (lessonId) => {
 
 const getLessons = async ({
     page = 1,
-    limit = 10,
+    limit = 10000,
     search = ""
 }) => {
-
     page = Number(page);
     limit = Number(limit);
-
     const skip = (page - 1) * limit;
-
     // Build filter dynamically
     const where = search
         ? {
@@ -71,7 +68,6 @@ const getLessons = async ({
             ]
         }
         : {};
-
     // Run queries in parallel
     const [lessons, total] = await Promise.all([
         prisma.lesson.findMany({
@@ -82,12 +78,10 @@ const getLessons = async ({
                 created_at: "desc"
             }
         }),
-
         prisma.lesson.count({
             where
         })
     ]);
-
     return prepareResponse(200, true, "Lessons fetched successfully", {
         data: lessons,
         meta: {
