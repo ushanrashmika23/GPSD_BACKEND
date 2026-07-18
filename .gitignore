@@ -1,5 +1,11 @@
-node_modules
-# Keep environment variables out of version control
+node_modules/
+
+# Environment variables
 .env
 
+# Prisma generated files
 /generated/prisma
+
+# Firebase service account
+src/config/firebaseServiceAccountKey.json
+**/firebaseServiceAccountKey.json

@@ -15,6 +15,8 @@ const lessonsRoute = require("./routes/lessons.route");
 app.use("/api/lessons", lessonsRoute);
 const batchRoute = require("./routes/batch.route");
 app.use("/api/batches", batchRoute);
+const studentRoute = require("./routes/student.route");
+app.use("/api/students", studentRoute);
 
 app.get("/", (req, res) => {
     res.json({

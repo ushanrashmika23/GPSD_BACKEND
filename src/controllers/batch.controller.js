@@ -1,5 +1,5 @@
 const { sendResponse, prepareResponse } = require("../utils/responseEntity");
-const { newBatch, updateBatch, deleteBatch, getBatches } = require("../services/batch.service");
+const { newBatch, updateBatch, deleteBatch, getBatches,getActiveBatches } = require("../services/batch.service");
 
 const addBatchController = async (req, res) => {
     try {
@@ -43,9 +43,19 @@ const getBatchesController = async (req, res) => {
     }
 };
 
+const getActiveBatchesController = async (req, res) => {
+    try {
+        const result = await getActiveBatches();
+        sendResponse(res, result);
+    } catch (error) {
+        sendResponse(res, prepareResponse(500, false, "Failed to fetch active batches controller", error));
+    }
+};
+
 module.exports = {
     addBatchController,
     updateBatchController,
     deleteBatchController,
     getBatchesController,
+    getActiveBatchesController
 };

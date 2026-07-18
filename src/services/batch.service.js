@@ -4,7 +4,7 @@ const { prepareResponse } = require("../utils/responseEntity");
 const newBatch = async (batchData) => {
     try {
         // console.log("batchData received:", JSON.stringify(batchData, null, 2));
-        const { name, exam_date, class_fee, start_time, end_time,day } = batchData;
+        const { name, exam_date, class_fee, start_time, end_time, day } = batchData;
         const data = {
             name,
             exam_date: new Date(exam_date),
@@ -106,9 +106,22 @@ const getBatches = async ({
     });
 };
 
+const getActiveBatches = async () => {
+    try {
+        const activeBatches = await prisma.batch.findMany({
+            where: { is_active: true },
+            orderBy: { created_at: "desc" }
+        });
+        return prepareResponse(200, true, "Active batches retrieved successfully", activeBatches);
+    } catch (error) {
+        return prepareResponse(500, false, "Failed to retrieve active batches", error.message || error);
+    }
+};
+
 module.exports = {
     newBatch,
     updateBatch,
     deleteBatch,
     getBatches,
+    getActiveBatches
 };

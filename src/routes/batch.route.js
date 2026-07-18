@@ -7,5 +7,6 @@ router.post("/", batchController.addBatchController);
 router.get("/", batchController.getBatchesController);
 router.put("/:id", batchController.updateBatchController);
 router.delete("/:id", batchController.deleteBatchController);
+router.get("/active", batchController.getActiveBatchesController);
 
 module.exports = router;
