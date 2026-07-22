@@ -56,7 +56,7 @@ model batch {
 }
 
 model class_day {
-  id         String       @id
+  id         String       @id @default(cuid())
   date       DateTime
   batch_id   String
   attendance attendance[]
@@ -67,7 +67,7 @@ model class_day {
 
 model attendance {
   id           String    @id @default(cuid())
-  time_in      DateTime
+  time_in      DateTime  @default(now())
   call_up_no   String
   class_day_id String
   student      student   @relation(fields: [call_up_no], references: [call_up_no])

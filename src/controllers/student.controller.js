@@ -15,9 +15,9 @@ const newStudentController = async (req, res) => {
 }
 
 const getStudentsController = async (req, res) => {
-    const { page, limit, search } = req.query;
+    const { page, limit, search, batch_id } = req.query;
     try{
-        const students = await getStudents({ page, limit, search });
+        const students = await getStudents({ page, limit, search, batch_id });
         sendResponse(res, students);
     }catch (err) {
         console.error("Get students controller error:", err);

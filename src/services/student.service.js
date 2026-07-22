@@ -77,7 +77,8 @@ const newStudent = async (studentData) => {
 const getStudents = async ({
     page = 1,
     limit = 10,
-    search = ""
+    search = "",
+    batch_id = "",
 }) => {
     page = Number(page);
     limit = Number(limit);
@@ -85,8 +86,15 @@ const getStudents = async ({
     const skip = (page - 1) * limit;
 
     // Build filter dynamically
-    const where = search
-        ? {
+    const where = {};
+    const conditions = [];
+
+    if (batch_id) {
+        conditions.push({ batch_id });
+    }
+
+    if (search) {
+        conditions.push({
             OR: [
                 {
                     call_up_no: {
@@ -98,16 +106,6 @@ const getStudents = async ({
                         contains: search,
                     },
                 },
-                // {
-                //     parent_name: {
-                //         contains: search,
-                //     },
-                // },
-                // {
-                //     parent_mobile: {
-                //         contains: search,
-                //     },
-                // },
                 {
                     user: {
                         first_name: {
@@ -137,8 +135,12 @@ const getStudents = async ({
                     },
                 },
             ],
-        }
-        : {};
+        });
+    }
+
+    if (conditions.length > 0) {
+        where.AND = conditions;
+    }
 
     // Run queries in parallel
     const [students, total] = await Promise.all([

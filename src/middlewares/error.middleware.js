@@ -1,6 +1,7 @@
 const { Prisma } = require("@prisma/client");
 
 module.exports = (err, req, res, next) => {
+    console.error("❌ Unhandled error:", err);
     if (err instanceof Prisma.PrismaClientKnownRequestError) {
         switch (err.code) {
             case "P2002":

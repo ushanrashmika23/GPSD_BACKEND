@@ -40,7 +40,8 @@ const updateBatch = async (batchId, batchData) => {
         return prepareResponse(200, true, "Batch updated successfully", batch);
     }
     catch (error) {
-        return prepareResponse(500, false, "Failed to update batch", error.message || error);
+        console.error("updateBatch error:", error);
+        return prepareResponse(500, false, "Failed to update batch", String(error?.message || error));
     }
 };
 
@@ -51,7 +52,8 @@ const deleteBatch = async (batchId) => {
         });
         return prepareResponse(200, true, "Batch deleted successfully", null);
     } catch (error) {
-        return prepareResponse(500, false, "Failed to delete batch", error.message || error);
+        console.error("deleteBatch error:", error);
+        return prepareResponse(500, false, "Failed to delete batch", String(error?.message || error));
     }
 };
 
@@ -114,7 +116,8 @@ const getActiveBatches = async () => {
         });
         return prepareResponse(200, true, "Active batches retrieved successfully", activeBatches);
     } catch (error) {
-        return prepareResponse(500, false, "Failed to retrieve active batches", error.message || error);
+        console.error("getActiveBatches error:", error);
+        return prepareResponse(500, false, "Failed to retrieve active batches", String(error?.message || error));
     }
 };
 

@@ -12,7 +12,8 @@ const newLesson = async (lessonData) => {
         });
         return prepareResponse(201, true, "Lesson created successfully", lesson);
     } catch (err) {
-        return prepareResponse(500, false, "Failed to create lesson", err);
+        console.error("newLesson error:", err);
+        return prepareResponse(500, false, "Failed to create lesson", String(err?.message || err));
     }
 };
 
@@ -28,7 +29,8 @@ const updateLesson = async (lessonId, lessonData) => {
         });
         return prepareResponse(200, true, "Lesson updated successfully", lesson);
     } catch (err) {
-        return prepareResponse(500, false, "Failed to update lesson", err);
+        console.error("updateLesson error:", err);
+        return prepareResponse(500, false, "Failed to update lesson", String(err?.message || err));
     }
 };
 
@@ -39,7 +41,8 @@ const deleteLesson = async (lessonId) => {
         });
         return prepareResponse(200, true, "Lesson deleted successfully", null);
     } catch (err) {
-        return prepareResponse(500, false, "Failed to delete lesson", err);
+        console.error("deleteLesson error:", err);
+        return prepareResponse(500, false, "Failed to delete lesson", String(err?.message || err));
     }
 }
 
