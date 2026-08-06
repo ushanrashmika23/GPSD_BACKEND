@@ -19,6 +19,12 @@ const studentRoute = require("./routes/student.route");
 app.use("/api/students", studentRoute);
 const attendanceRoute = require("./routes/attendance.route");
 app.use("/api/attendance", attendanceRoute);
+const feesRoute = require("./routes/fees.route");
+app.use("/api/fees", feesRoute);
+const materialRoute = require("./routes/material.route");
+app.use("/api/materials", materialRoute);
+const testRoute = require("./routes/test.route");
+app.use("/api/test", testRoute);
 
 app.get("/", (req, res) => {
     res.json({

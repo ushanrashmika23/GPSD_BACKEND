@@ -78,9 +78,9 @@ model attendance {
 }
 
 model payment {
-  id           String   @id @default(cuid())
+  id           Int      @id @default(autoincrement())
   amount       Float
-  payment_date DateTime
+  payment_date DateTime @default(now())
   month        String
   call_up_no   String
   student      student  @relation(fields: [call_up_no], references: [call_up_no])
