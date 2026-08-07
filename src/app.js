@@ -23,6 +23,10 @@ const feesRoute = require("./routes/fees.route");
 app.use("/api/fees", feesRoute);
 const materialRoute = require("./routes/material.route");
 app.use("/api/materials", materialRoute);
+const materialAccessRoute = require("./routes/materialAccess.route");
+app.use("/api/access", materialAccessRoute);
+const paperRoute = require("./routes/marks.route");
+app.use("/api/marks", paperRoute);
 const testRoute = require("./routes/test.route");
 app.use("/api/test", testRoute);
 

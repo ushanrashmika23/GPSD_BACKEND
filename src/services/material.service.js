@@ -95,6 +95,9 @@ const getMaterials = async ({ page = 1, limit = 12, search = "", batch_id = "", 
                 include: {
                     lesson: { select: { id: true, title: true, type: true } },
                     material_access: {
+                        where: {
+                            expiry_date: { gte: new Date() },
+                        },
                         include: { batch: { select: { id: true, name: true } } },
                     },
                 },

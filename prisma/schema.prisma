@@ -92,7 +92,7 @@ model paper {
   id               String          @id @default(cuid())
   paper_name       String
   paper_date       DateTime
-  avg_marks        Float
+  avg_marks        Float?
   is_mark_released Boolean         @default(false)
   created_at       DateTime        @default(now())
   batch_id         String
