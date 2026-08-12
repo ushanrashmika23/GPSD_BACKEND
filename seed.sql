@@ -9,20 +9,20 @@
 -- ============================================================================
 -- 1. USERS (7 users: 1 admin, 1 staff, 5 students)
 -- ============================================================================
-INSERT INTO user (id, email, gAuthID, password, jwt, lastLogin, createdAt, roles, mobile, first_name, last_name, is_active, address)
+INSERT IGNORE INTO user (id, email, gAuthID, password, jwt, lastLogin, createdAt, roles, mobile, first_name, last_name, is_active, address)
 VALUES
-('u001', 'admin@gpsd.edu.lk',  'none', '$2b$10$wlchZpjnBQvL/GBg5wJKEOxdqLonCK0dvNvlh2NF/qr.szj2z.xEi', 'none', NOW(), NOW(), 'admin',  '0771000001', 'Admin',    'User',     1, '123 Admin Street, Colombo'),
-('u002', 'staff@gpsd.edu.lk',  'none', '$2b$10$wlchZpjnBQvL/GBg5wJKEOxdqLonCK0dvNvlh2NF/qr.szj2z.xEi', 'none', NOW(), NOW(), 'staff',  '0771000002', 'Staff',    'Member',    1, '456 Staff Avenue, Kandy'),
-('u003', 'sachin@gpsd.edu.lk', 'none', '$2b$10$wlchZpjnBQvL/GBg5wJKEOxdqLonCK0dvNvlh2NF/qr.szj2z.xEi', 'none', NOW(), NOW(), 'student','0772000001', 'Sachin',   'Perera',    1, '10 Galle Road, Colombo'),
-('u004', 'amaya@gpsd.edu.lk',  'none', '$2b$10$wlchZpjnBQvL/GBg5wJKEOxdqLonCK0dvNvlh2NF/qr.szj2z.xEi', 'none', NOW(), NOW(), 'student','0772000002', 'Amaya',    'Fernando',  1, '22 Hill Street, Negombo'),
-('u005', 'kasun@gpsd.edu.lk',  'none', '$2b$10$wlchZpjnBQvL/GBg5wJKEOxdqLonCK0dvNvlh2NF/qr.szj2z.xEi', 'none', NOW(), NOW(), 'student','0772000003', 'Kasun',    'Jayawardena',1, '5 Lake Road, Kandy'),
-('u006', 'nimali@gpsd.edu.lk', 'none', '$2b$10$wlchZpjnBQvL/GBg5wJKEOxdqLonCK0dvNvlh2NF/qr.szj2z.xEi', 'none', NOW(), NOW(), 'student','0772000004', 'Nimali',   'Bandara',   1, '78 Temple Road, Galle'),
-('u007', 'ruwan@gpsd.edu.lk',  'none', '$2b$10$wlchZpjnBQvL/GBg5wJKEOxdqLonCK0dvNvlh2NF/qr.szj2z.xEi', 'none', NOW(), NOW(), 'student','0772000005', 'Ruwan',    'Silva',     1, '33 Fort Road, Matara');
+('u001', 'admin@gpsd.edu.lk',  'local-u001', '$2b$10$wlchZpjnBQvL/GBg5wJKEOxdqLonCK0dvNvlh2NF/qr.szj2z.xEi', 'none', NOW(), NOW(), 'admin',  '0771000001', 'Admin',    'User',     1, '123 Admin Street, Colombo'),
+('u002', 'staff@gpsd.edu.lk',  'local-u002', '$2b$10$wlchZpjnBQvL/GBg5wJKEOxdqLonCK0dvNvlh2NF/qr.szj2z.xEi', 'none', NOW(), NOW(), 'staff',  '0771000002', 'Staff',    'Member',    1, '456 Staff Avenue, Kandy'),
+('u003', 'sachin@gpsd.edu.lk', 'local-u003', '$2b$10$wlchZpjnBQvL/GBg5wJKEOxdqLonCK0dvNvlh2NF/qr.szj2z.xEi', 'none', NOW(), NOW(), 'student','0772000001', 'Sachin',   'Perera',    1, '10 Galle Road, Colombo'),
+('u004', 'amaya@gpsd.edu.lk',  'local-u004', '$2b$10$wlchZpjnBQvL/GBg5wJKEOxdqLonCK0dvNvlh2NF/qr.szj2z.xEi', 'none', NOW(), NOW(), 'student','0772000002', 'Amaya',    'Fernando',  1, '22 Hill Street, Negombo'),
+('u005', 'kasun@gpsd.edu.lk',  'local-u005', '$2b$10$wlchZpjnBQvL/GBg5wJKEOxdqLonCK0dvNvlh2NF/qr.szj2z.xEi', 'none', NOW(), NOW(), 'student','0772000003', 'Kasun',    'Jayawardena',1, '5 Lake Road, Kandy'),
+('u006', 'nimali@gpsd.edu.lk', 'local-u006', '$2b$10$wlchZpjnBQvL/GBg5wJKEOxdqLonCK0dvNvlh2NF/qr.szj2z.xEi', 'none', NOW(), NOW(), 'student','0772000004', 'Nimali',   'Bandara',   1, '78 Temple Road, Galle'),
+('u007', 'ruwan@gpsd.edu.lk',  'local-u007', '$2b$10$wlchZpjnBQvL/GBg5wJKEOxdqLonCK0dvNvlh2NF/qr.szj2z.xEi', 'none', NOW(), NOW(), 'student','0772000005', 'Ruwan',    'Silva',     1, '33 Fort Road, Matara');
 
 -- ============================================================================
 -- 2. BATCHES (2 batches)
 -- ============================================================================
-INSERT INTO batch (id, name, exam_date, class_fee, is_active, start_time, end_time, created_at, day)
+INSERT IGNORE INTO batch (id, name, exam_date, class_fee, is_active, start_time, end_time, created_at, day)
 VALUES
 ('b001', '2025 Jan - Pure Mathematics',   '2025-12-15 09:00:00', 15000.00, 1, '08:00', '12:00', NOW(), 'Monday'),
 ('b002', '2025 Jan - Applied Mathematics', '2025-12-16 09:00:00', 15000.00, 1, '13:00', '17:00', NOW(), 'Wednesday');
@@ -30,7 +30,7 @@ VALUES
 -- ============================================================================
 -- 3. STUDENTS (5 students, linked to users and batches)
 -- ============================================================================
-INSERT INTO student (call_up_no, school, parent_name, parent_mobile, user_id, batch_id)
+INSERT IGNORE INTO student (call_up_no, school, parent_name, parent_mobile, user_id, batch_id)
 VALUES
 ('GPSD001', 'Royal College Colombo',     'Sunil Perera',     '0773000001', 'u003', 'b001'),
 ('GPSD002', 'Visakha Vidyalaya',         'Nimal Fernando',   '0773000002', 'u004', 'b001'),
@@ -41,7 +41,7 @@ VALUES
 -- ============================================================================
 -- 4. LESSONS (4 lessons)
 -- ============================================================================
-INSERT INTO lesson (id, title, description, type, created_at)
+INSERT IGNORE INTO lesson (id, title, description, type, created_at)
 VALUES
 ('l001', 'Introduction to Algebra',     'Fundamental algebra concepts including equations, inequalities, and polynomials', 'PURE',   NOW()),
 ('l002', 'Calculus Basics',             'Limits, derivatives, and basic integration techniques',                          'PURE',   NOW()),
@@ -51,7 +51,7 @@ VALUES
 -- ============================================================================
 -- 5. MATERIALS (4 materials)
 -- ============================================================================
-INSERT INTO material (id, title, description, material_url, type, lesson_id)
+INSERT IGNORE INTO material (id, title, description, material_url, type, lesson_id)
 VALUES
 ('m001', 'Algebra Textbook Chapter 1',   'Chapter 1: Linear Equations and Inequalities',           'DOCUMENT/m001-algebra-ch1.pdf',   'DOCUMENT', 'l001'),
 ('m002', 'Calculus Video Lecture 1',     'Introduction to Limits — 45 minute video lecture',         'VIDEO/m002-calculus-lec1.mp4',    'VIDEO',    'l002'),
@@ -61,7 +61,7 @@ VALUES
 -- ============================================================================
 -- 6. MATERIAL ACCESS (grant materials to batches)
 -- ============================================================================
-INSERT INTO material_access (id, expiry_date, created_at, batch_id, material_id)
+INSERT IGNORE INTO material_access (id, expiry_date, created_at, batch_id, material_id)
 VALUES
 ('ma001', '2026-12-31 23:59:59', NOW(), 'b001', 'm001'),
 ('ma002', '2026-12-31 23:59:59', NOW(), 'b001', 'm002'),
@@ -71,7 +71,7 @@ VALUES
 -- ============================================================================
 -- 7. PAPERS (3 papers with marks)
 -- ============================================================================
-INSERT INTO paper (id, paper_name, paper_date, avg_marks, is_mark_released, created_at, batch_id, material_id)
+INSERT IGNORE INTO paper (id, paper_name, paper_date, avg_marks, is_mark_released, created_at, batch_id, material_id)
 VALUES
 ('p001', 'Term Test 1 — Pure Mathematics',  '2025-06-15 09:00:00', NULL, 0, NOW(), 'b001', 'm001'),
 ('p002', 'Mid Term — Applied Mathematics',  '2025-07-20 09:00:00', NULL, 0, NOW(), 'b002', 'm003'),
@@ -82,20 +82,20 @@ VALUES
 -- ============================================================================
 
 -- Paper 1 marks (Term Test 1 - Pure Math, Batch 1 students)
-INSERT INTO student_marks (id, marks, comments, created_at, call_up_no, paper_id)
+INSERT IGNORE INTO student_marks (id, marks, comments, created_at, call_up_no, paper_id)
 VALUES
 ('sm001', 85.0, 'Good work',              NOW(), 'GPSD001', 'p001'),
 ('sm002', 72.0, 'Needs improvement',      NOW(), 'GPSD002', 'p001'),
 ('sm003', 91.0, 'Excellent performance',  NOW(), 'GPSD003', 'p001');
 
 -- Paper 2 marks (Mid Term - Applied Math, Batch 2 students)
-INSERT INTO student_marks (id, marks, comments, created_at, call_up_no, paper_id)
+INSERT IGNORE INTO student_marks (id, marks, comments, created_at, call_up_no, paper_id)
 VALUES
 ('sm004', 78.0, 'none', NOW(), 'GPSD004', 'p002'),
 ('sm005', 65.0, 'none', NOW(), 'GPSD005', 'p002');
 
 -- Paper 3 marks (Final Exam - Pure Math, Batch 1 students, published)
-INSERT INTO student_marks (id, marks, comments, created_at, call_up_no, paper_id)
+INSERT IGNORE INTO student_marks (id, marks, comments, created_at, call_up_no, paper_id)
 VALUES
 ('sm006', 88.0, 'Great improvement',      NOW(), 'GPSD001', 'p003'),
 ('sm007', 56.0, 'Must work harder',       NOW(), 'GPSD002', 'p003'),
@@ -104,7 +104,7 @@ VALUES
 -- ============================================================================
 -- 9. CLASS DAYS (attendance sessions)
 -- ============================================================================
-INSERT INTO class_day (id, date, batch_id)
+INSERT IGNORE INTO class_day (id, date, batch_id)
 VALUES
 ('cd001', '2025-06-02 08:00:00', 'b001'),  -- Monday
 ('cd002', '2025-06-09 08:00:00', 'b001'),  -- Monday
@@ -113,7 +113,7 @@ VALUES
 -- ============================================================================
 -- 10. ATTENDANCE
 -- ============================================================================
-INSERT INTO attendance (id, time_in, call_up_no, class_day_id)
+INSERT IGNORE INTO attendance (id, time_in, call_up_no, class_day_id)
 VALUES
 ('a001', '2025-06-02 08:05:00', 'GPSD001', 'cd001'),
 ('a002', '2025-06-02 08:10:00', 'GPSD002', 'cd001'),
@@ -126,7 +126,7 @@ VALUES
 -- ============================================================================
 -- 11. PAYMENTS (fee payments)
 -- ============================================================================
-INSERT INTO payment (id, amount, payment_date, month, call_up_no)
+INSERT IGNORE INTO payment (id, amount, payment_date, month, call_up_no)
 VALUES
 (1, 5000.00, '2025-01-15 10:00:00', '2025-01', 'GPSD001'),
 (2, 5000.00, '2025-01-20 10:00:00', '2025-01', 'GPSD002'),

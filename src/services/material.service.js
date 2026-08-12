@@ -1,9 +1,10 @@
 const prisma = require('../config/prisma');
 const { prepareResponse } = require('../utils/responseEntity');
-const { PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { PutObjectCommand } = require("@aws-sdk/client-s3");
 const { r2 } = require("../config/r2.js");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { onlyLettersAndNumbers } = require('../utils/sanitizeInput.js');
+const { signCdnUrl } = require('../utils/cdnSign.js');
 
 
 // Create a new material and upload the file to R2 --- use the backend service to upload the file to R2 and store the key in the database
@@ -24,12 +25,21 @@ const newMaterial = async (material) => {
 
         const key = `${type}/${Date.now()}-${onlyLettersAndNumbers(file.originalname)}`;
 
-        await r2.send(new PutObjectCommand({
-            Bucket: process.env.R2_BUCKET,
-            Key: key,
-            Body: file.buffer,
-            ContentType: file.mimetype,
-        }));
+        const hasR2 = process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY && process.env.R2_SECRET_KEY && process.env.R2_BUCKET;
+        if (hasR2) {
+            await r2.send(new PutObjectCommand({
+                Bucket: process.env.R2_BUCKET,
+                Key: key,
+                Body: file.buffer,
+                ContentType: file.mimetype,
+            }));
+        } else {
+            const fs = require("fs");
+            const path = require("path");
+            const dest = path.join(__dirname, "../../storage", key);
+            fs.mkdirSync(path.dirname(dest), { recursive: true });
+            fs.writeFileSync(dest, file.buffer);
+        }
 
         const data = {
             type,
@@ -106,8 +116,13 @@ const getMaterials = async ({ page = 1, limit = 12, search = "", batch_id = "", 
             prisma.material.count({ where }),
         ]);
 
+        const withCdn = materials.map((m) => ({
+            ...m,
+            cdn_url: signCdnUrl(m.material_url),
+        }));
+
         return prepareResponse(200, true, "Materials fetched successfully", {
-            data: materials,
+            data: withCdn,
             meta: {
                 page,
                 limit,

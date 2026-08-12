@@ -20,13 +20,15 @@ const newStudent = async (studentData) => {
     let firebaseUser = null;
 
     try {
-        // 1. Create user in Firebase Authentication (outside Prisma transaction)
-        firebaseUser = await auth.createUser({
-            email,
-            password,
-            displayName: `${firstName} ${lastName}`,
-        });
-        console.log("Firebase user created:", firebaseUser.uid);
+        // 1. Create user in Firebase Authentication when configured
+        if (auth) {
+            firebaseUser = await auth.createUser({
+                email,
+                password,
+                displayName: `${firstName} ${lastName}`,
+            });
+            console.log("Firebase user created:", firebaseUser.uid);
+        }
 
         // 2. Create user + student in Prisma transaction
         const result = await prisma.$transaction(async (tx) => {
@@ -35,7 +37,7 @@ const newStudent = async (studentData) => {
                     email,
                     password,
                     jwt: "",
-                    gAuthID: firebaseUser.uid,
+                    gAuthID: firebaseUser?.uid || `local-${email}`,
                     mobile,
                     first_name: firstName,
                     last_name: lastName,
