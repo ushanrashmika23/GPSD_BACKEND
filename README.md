@@ -18,16 +18,3 @@ It uses a 3-tier architecture handling logic for students, batches, lessons, fee
 4. Run `npx prisma generate` and `npx prisma migrate deploy` to set up the DB.
 5. Run `npm run seed` to populate initial data.
 6. Run `npm start` to start the backend server on port 5000.
-
-## Screenshots (Backend Output)
-
-Please place the corresponding images in the `docs/images/` folder.
-
-### Server Startup Output
-![Server Output](./docs/images/backend_server_start.png)
-
-### API Health Check Response
-![API Response](./docs/images/backend_api_health.png)
-
-### Database Schema ERD
-![Database ERD](./docs/images/backend_db_schema.png)
