@@ -88,6 +88,11 @@ const getBatches = async ({
             take: limit,
             orderBy: {
                 created_at: "desc"
+            },
+            include: {
+                _count: {
+                    select: { student: true }
+                }
             }
         }),
         prisma.batch.count({

@@ -17,59 +17,114 @@ const newStudent = async (studentData) => {
         batchId = "",
     } = studentData;
 
+    // --- early validation: Firebase & DB both need these ---
+    const missing = [];
+    if (!email || !email.includes("@")) missing.push("valid email");
+    if (!password || password.length < 6) missing.push("password (min 6 characters)");
+    if (!mobile) missing.push("mobile");
+    if (!firstName) missing.push("firstName");
+    if (!lastName) missing.push("lastName");
+    if (!callUpNo) missing.push("callUpNo");
+    if (!batchId) missing.push("batchId");
+
+    if (missing.length > 0) {
+        return prepareResponse(400, false, `Missing or invalid fields: ${missing.join(", ")}`);
+    }
+
     let firebaseUser = null;
+    let dbUser = null;
 
     try {
-        // 1. Create user in Firebase Authentication (outside Prisma transaction)
+        // 1. Create user in Firebase Authentication
         firebaseUser = await auth.createUser({
             email,
             password,
             displayName: `${firstName} ${lastName}`,
         });
+
+        if (!firebaseUser || !firebaseUser.uid) {
+            throw new Error(
+                "Firebase createUser returned successfully but uid is missing — " +
+                JSON.stringify({ email, displayName: `${firstName} ${lastName}` })
+            );
+        }
         console.log("Firebase user created:", firebaseUser.uid);
 
-        // 2. Create user + student in Prisma transaction
-        const result = await prisma.$transaction(async (tx) => {
-            const user = await tx.user.create({
-                data: {
-                    email,
-                    password,
-                    jwt: "",
-                    gAuthID: firebaseUser.uid,
-                    mobile,
-                    first_name: firstName,
-                    last_name: lastName,
-                    address,
-                },
-            });
-
-            const student = await tx.student.create({
-                data: {
-                    call_up_no: callUpNo,
-                    school,
-                    parent_name: parentName,
-                    parent_mobile: parentMobile,
-                    user_id: user.id,
-                    batch_id: batchId,
-                },
-            });
-
-            return { user, student };
+        // 2. Create user record directly (no transaction wrapper)
+        dbUser = await prisma.user.create({
+            data: {
+                email,
+                password:"pwd-not-stored", // Password is not stored in DB; Firebase handles authentication
+                jwt: "",
+                gAuthID: firebaseUser.uid,
+                mobile,
+                first_name: firstName,
+                last_name: lastName,
+                address,
+            },
         });
+        console.log("DB user created:", dbUser.id);
 
-        return prepareResponse(201, true, "Student created successfully", result);
+        // 3. Create student record directly
+        const student = await prisma.student.create({
+            data: {
+                call_up_no: callUpNo,
+                school,
+                parent_name: parentName,
+                parent_mobile: parentMobile,
+                user_id: dbUser.id,
+                batch_id: batchId,
+            },
+        });
+        console.log("DB student created:", student.call_up_no);
+
+        return prepareResponse(201, true, "Student created successfully", {
+            user: dbUser,
+            student,
+        });
     } catch (err) {
-        // 3. Rollback: delete Firebase user if Prisma failed after Firebase creation
+        // --- figure out which step failed for targeted cleanup ---
+        const phase = !firebaseUser
+            ? "firebase-createUser"
+            : !dbUser
+            ? "prisma-user-create"
+            : "prisma-student-create";
+
+        console.error(`[newStudent] ${phase} failed:`, err);
+
+        // --- cleanup: remove Firebase user if it was created ---
         if (firebaseUser) {
-            try {
-                await auth.deleteUser(firebaseUser.uid);
-                console.log("Firebase user rolled back:", firebaseUser.uid);
-            } catch (deleteErr) {
-                console.error("Failed to rollback Firebase user:", firebaseUser.uid, deleteErr);
-            }
+            await auth.deleteUser(firebaseUser.uid).catch((deleteErr) =>
+                console.error("Failed to rollback Firebase user:", firebaseUser.uid, deleteErr)
+            );
+            console.log("Firebase user rolled back:", firebaseUser.uid);
         }
-        console.error("Create student error:", err);
-        return prepareResponse(500, false, "Failed to create student", err);
+
+        // --- cleanup: remove DB user if student creation was the failing step ---
+        if (dbUser && phase === "prisma-student-create") {
+            await prisma.user.delete({ where: { id: dbUser.id } }).catch((deleteErr) =>
+                console.error("Failed to rollback DB user:", dbUser.id, deleteErr)
+            );
+            console.log("DB user rolled back:", dbUser.id);
+        }
+
+        // --- Prisma unique-constraint violation (P2002) → friendly message ---
+        if (err?.code === "P2002") {
+            const target = err.meta?.target;
+            const field = Array.isArray(target) ? target.join(", ") : "field";
+            return prepareResponse(
+                409,
+                false,
+                `Duplicate value for ${field}. A record with this ${field} already exists.`
+            );
+        }
+
+        const message =
+            phase === "firebase-createUser"
+                ? `Firebase user creation failed: ${err?.message || err}`
+                : `Database error (${phase}): ${err?.message || err}`;
+
+        return prepareResponse(500, false, message);
     }
 }
 
@@ -296,10 +351,35 @@ const deleteStudent = async (studentId) => {
     }
 };
 
+const resetStudentPassword = async (callUpNo, newPassword) => {
+    try {
+        // Find student with user record to get gAuthID (Firebase UID)
+        const student = await prisma.student.findUnique({
+            where: { call_up_no: callUpNo },
+            include: { user: true },
+        });
+        if (!student) {
+            return prepareResponse(404, false, "Student not found");
+        }
+        if (!student.user.gAuthID || student.user.gAuthID === "none") {
+            return prepareResponse(400, false, "Student has no Firebase account linked");
+        }
+
+        await auth.updateUser(student.user.gAuthID, { password: newPassword });
+        console.log("Password reset for Firebase user:", student.user.gAuthID);
+
+        return prepareResponse(200, true, "Password reset successfully");
+    } catch (err) {
+        console.error("Reset student password error:", err);
+        return prepareResponse(500, false, "Failed to reset password", String(err?.message || err));
+    }
+};
+
 module.exports = {
     newStudent,
     getStudents,
     getStudentById,
     updateStudent,
-    deleteStudent
+    deleteStudent,
+    resetStudentPassword,
 }

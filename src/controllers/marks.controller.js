@@ -65,6 +65,24 @@ const togglePublishController = async (req, res) => {
     }
 };
 
+const updatePaperController = async (req, res) => {
+    try {
+        const result = await marksService.updatePaper(req.params.paperId, req.body);
+        sendResponse(res, result);
+    } catch (error) {
+        sendResponse(res, prepareResponse(500, false, "Error updating paper", error?.message || error));
+    }
+};
+
+const deletePaperController = async (req, res) => {
+    try {
+        const result = await marksService.deletePaper(req.params.paperId);
+        sendResponse(res, result);
+    } catch (error) {
+        sendResponse(res, prepareResponse(500, false, "Error deleting paper", error?.message || error));
+    }
+};
+
 module.exports = {
     createPaperController,
     getPapersController,
@@ -73,4 +91,6 @@ module.exports = {
     updateMarkController,
     getMarksByPaperController,
     togglePublishController,
+    updatePaperController,
+    deletePaperController,
 };

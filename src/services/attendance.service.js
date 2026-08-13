@@ -78,6 +78,9 @@ const getTodayClases = async (day) => {
             },
             include: {
                 batch: true,
+                attendance: {
+                    select: { call_up_no: true },
+                },
                 _count: {
                     select: { attendance: true },
                 },
@@ -98,10 +101,11 @@ const getTodayClases = async (day) => {
             });
         }
 
-        // Enrich each class_day with present / unmarked counts
+        // Enrich each class_day with present / unmarked counts + marked call-up list
         const enriched = todayClasses.map((cd) => {
             const presentCount = cd._count.attendance;
             const totalStudents = studentCountMap[cd.batch_id] || 0;
+            const markedCallUpNos = cd.attendance.map((a) => a.call_up_no);
             return {
                 id: cd.id,
                 date: cd.date,
@@ -110,6 +114,7 @@ const getTodayClases = async (day) => {
                 presentCount,
                 totalStudents,
                 unmarkedCount: totalStudents - presentCount,
+                markedCallUpNos,
             };
         });
 
@@ -179,8 +184,155 @@ const markAttendance = async (attendanceData) => {
     }
 }
 
+const unmarkAttendance = async (attendanceData) => {
+    try {
+        const { call_up_no } = attendanceData;
+
+        //find the student by call_up_no
+        const student = await prisma.student.findUnique({
+            where: { call_up_no: call_up_no },
+        });
+
+        if (!student) {
+            return prepareResponse(404, false, 'Student not found', null);
+        }
+
+        const today = new Date();
+        const { startOfDay, startOfNextDay } = getDayBoundaries(today);
+
+        //find the class_day for today for the student's batch
+        const classDay = await prisma.class_day.findFirst({
+            where: {
+                date: {
+                    gte: startOfDay,
+                    lt: startOfNextDay,
+                },
+                batch_id: student.batch_id,
+            },
+        });
+
+        if (!classDay) {
+            return prepareResponse(404, false, 'No class day found for today for this student\'s batch', null);
+        }
+
+        // Check if attendance is marked for this student on this day
+        const existingAttendance = await prisma.attendance.findFirst({
+            where: {
+                call_up_no: student.call_up_no,
+                class_day_id: classDay.id,
+            },
+        });
+
+        if (!existingAttendance) {
+            return prepareResponse(400, false, 'Attendance is not marked for this student today', null);
+        }
+
+        // Remove attendance record
+        await prisma.attendance.delete({
+            where: { id: existingAttendance.id },
+        });
+
+        return prepareResponse(200, true, 'Attendance unmarked successfully', existingAttendance);
+    } catch (err) {
+        console.error("unmarkAttendance error:", err);
+        return prepareResponse(500, false, 'Error unmarking attendance', String(err?.message || err));
+    }
+}
+
+const getAttendanceHistory = async ({ page = 1, limit = 12 } = {}) => {
+    page = Number(page);
+    limit = Number(limit);
+    const skip = (page - 1) * limit;
+
+    try {
+        const [classDays, total] = await Promise.all([
+            prisma.class_day.findMany({
+                skip,
+                take: limit,
+                orderBy: { date: 'desc' },
+                include: {
+                    batch: true,
+                    _count: {
+                        select: { attendance: true },
+                    },
+                },
+            }),
+            prisma.class_day.count(),
+        ]);
+
+        // Get total student count per batch for unmarked calculation
+        const batchIds = [...new Set(classDays.map((cd) => cd.batch_id))];
+        const studentCountMap = {};
+        if (batchIds.length > 0) {
+            const counts = await Promise.all(
+                batchIds.map((batchId) =>
+                    prisma.student.count({ where: { batch_id: batchId } })
+                )
+            );
+            batchIds.forEach((batchId, i) => {
+                studentCountMap[batchId] = counts[i];
+            });
+        }
+
+        // Enrich each class_day with present / unmarked counts
+        const enriched = classDays.map((cd) => {
+            const presentCount = cd._count.attendance;
+            const totalStudents = studentCountMap[cd.batch_id] || 0;
+            return {
+                id: cd.id,
+                date: cd.date,
+                batch_id: cd.batch_id,
+                batch: cd.batch,
+                presentCount,
+                totalStudents,
+                unmarkedCount: totalStudents - presentCount,
+            };
+        });
+
+        return prepareResponse(200, true, 'Attendance history fetched successfully', {
+            data: enriched,
+            meta: {
+                page,
+                limit,
+                total,
+                pages: Math.ceil(total / limit),
+            },
+        });
+    } catch (err) {
+        console.error("getAttendanceHistory error:", err);
+        return prepareResponse(500, false, 'Error fetching attendance history', String(err?.message || err));
+    }
+}
+
+const deleteClassDay = async (classDayId) => {
+    try {
+        const classDay = await prisma.class_day.findUnique({
+            where: { id: classDayId },
+        });
+
+        if (!classDay) {
+            return prepareResponse(404, false, 'Class day not found', null);
+        }
+
+        // The attendance relation has no cascade — remove attendance records
+        // first, then the class day itself
+        await prisma.$transaction([
+            prisma.attendance.deleteMany({ where: { class_day_id: classDayId } }),
+            prisma.class_day.delete({ where: { id: classDayId } }),
+        ]);
+
+        return prepareResponse(200, true, 'Class day deleted successfully', classDay);
+    } catch (err) {
+        console.error("deleteClassDay error:", err);
+        return prepareResponse(500, false, 'Error deleting class day', String(err?.message || err));
+    }
+}
+
 module.exports = {
     createNewDay,
     getTodayClases,
-    markAttendance
+    markAttendance,
+    unmarkAttendance,
+    getAttendanceHistory,
+    deleteClassDay
 }

@@ -6,11 +6,13 @@ const login = async (data) => {
     const { username, password } = data;
     try {
         const user = await prisma.user.findUnique({
-            where: { username, password },
+            where: { username },
         });
         if (!user) {
             return prepareResponse(404, false, "User not found", null);
         }
+
+        
 
     } catch (err) {
         console.error(err);

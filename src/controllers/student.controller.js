@@ -1,5 +1,5 @@
 const { sendResponse, prepareResponse } = require("../utils/responseEntity");
-const { newStudent, getStudents, getStudentById, updateStudent, deleteStudent } = require("../services/student.service");
+const { newStudent, getStudents, getStudentById, updateStudent, deleteStudent, resetStudentPassword } = require("../services/student.service");
 
 const newStudentController = async (req, res) => {
     const studentData = req.body;
@@ -59,10 +59,28 @@ const deleteStudentController = async (req, res) => {
     }
 }
 
+const resetPasswordController = async (req, res) => {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    if (!password || password.length < 6) {
+        return sendResponse(res, prepareResponse(400, false, "Password must be at least 6 characters"));
+    }
+
+    try {
+        const result = await resetStudentPassword(id, password);
+        sendResponse(res, result);
+    } catch (err) {
+        console.error("Reset password controller error:", err);
+        sendResponse(res, prepareResponse(500, false, "Failed to reset password", String(err?.message || err)));
+    }
+}
+
 module.exports = {
     newStudentController,
     getStudentsController,
     getStudentByIdController,
     updateStudentController,
-    deleteStudentController
+    deleteStudentController,
+    resetPasswordController,
 }

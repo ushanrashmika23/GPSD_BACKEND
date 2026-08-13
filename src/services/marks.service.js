@@ -83,6 +83,26 @@ const toglePublishMark = async (paper_id) => {
     }
 };
 
+const updatePaper = async (paperId, data) => {
+    const { paper_name, paper_date, batch_id, material_id } = data;
+    try {
+        const updateData = {};
+        if (paper_name !== undefined) updateData.paper_name = paper_name;
+        if (paper_date !== undefined) updateData.paper_date = new Date(paper_date);
+        if (batch_id !== undefined) updateData.batch_id = batch_id;
+        if (material_id !== undefined) updateData.material_id = material_id;
+
+        const paper = await prisma.paper.update({
+            where: { id: paperId },
+            data: updateData,
+        });
+        return prepareResponse(200, true, "Paper updated successfully", paper);
+    } catch (err) {
+        console.error(err);
+        return prepareResponse(500, false, "Error updating paper", err?.message || err);
+    }
+};
+
 const getAllPapers = async ({ page = 1, limit = 12, batch_id = "" }) => {
     page = Number(page);
     limit = Number(limit);
@@ -141,6 +161,18 @@ const getMarksByPaper = async (paper_id) => {
     }
 };
 
+const deletePaper = async (paperId) => {
+    try {
+        // Delete associated marks first, then the paper
+        await prisma.student_marks.deleteMany({ where: { paper_id: paperId } });
+        await prisma.paper.delete({ where: { id: paperId } });
+        return prepareResponse(200, true, "Paper deleted successfully");
+    } catch (err) {
+        console.error(err);
+        return prepareResponse(500, false, "Error deleting paper", err?.message || err);
+    }
+};
+
 module.exports = {
     newPaper,
     getPapers,
@@ -149,4 +181,6 @@ module.exports = {
     newMark,
     updateMark,
     toglePublishMark,
+    updatePaper,
+    deletePaper,
 };

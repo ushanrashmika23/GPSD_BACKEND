@@ -1,4 +1,4 @@
-const { createNewDay, getTodayClases    , markAttendance } = require('../services/attendance.service');
+const { createNewDay, getTodayClases    , markAttendance, unmarkAttendance, getAttendanceHistory, deleteClassDay } = require('../services/attendance.service');
 const { sendResponse, prepareResponse } = require('../utils/responseEntity');
 
 const newDayController = async (req, res) => {
@@ -34,8 +34,46 @@ const markAttendanceController = async (req, res) => {
 }
 
 
+const unmarkAttendanceController = async (req, res) => {
+    try {
+        const attendanceData = req.body;
+        const result = await unmarkAttendance(attendanceData);
+        return sendResponse(res, result);
+    } catch (err) {
+        console.error("unmarkAttendanceController error:", err);
+        return sendResponse(res, prepareResponse(500, false, 'Error unmarking attendance', String(err?.message || err)));
+    }
+}
+
+
+const getAttendanceHistoryController = async (req, res) => {
+    try {
+        const { page, limit } = req.query;
+        const result = await getAttendanceHistory({ page, limit });
+        return sendResponse(res, result);
+    } catch (err) {
+        console.error("getAttendanceHistoryController error:", err);
+        return sendResponse(res, prepareResponse(500, false, 'Error fetching attendance history', String(err?.message || err)));
+    }
+}
+
+const deleteClassDayController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await deleteClassDay(id);
+        return sendResponse(res, result);
+    } catch (err) {
+        console.error("deleteClassDayController error:", err);
+        return sendResponse(res, prepareResponse(500, false, 'Error deleting class day', String(err?.message || err)));
+    }
+}
+
+
 module.exports = {
     newDayController,
     getTodayClassesController,
-    markAttendanceController
+    markAttendanceController,
+    unmarkAttendanceController,
+    getAttendanceHistoryController,
+    deleteClassDayController
 }
