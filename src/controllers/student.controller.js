@@ -1,5 +1,5 @@
 const { sendResponse, prepareResponse } = require("../utils/responseEntity");
-const { newStudent, getStudents, getStudentById, updateStudent, deleteStudent, resetStudentPassword } = require("../services/student.service");
+const { newStudent, getStudents, getStudentById, updateStudent, deleteStudent, resetStudentPassword, getStudentProfileByUserId } = require("../services/student.service");
 
 const newStudentController = async (req, res) => {
     const studentData = req.body;
@@ -76,6 +76,21 @@ const resetPasswordController = async (req, res) => {
     }
 }
 
+// GET /api/students/profile/:userId
+// Returns the logged-in student's own profile (user + student + class).
+// Role: student (own profile), staff/admin — NOT protected yet; once auth
+// middleware is applied, students must only be able to fetch their own profile.
+const getStudentProfileController = async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const profile = await getStudentProfileByUserId(userId);
+        sendResponse(res, profile);
+    } catch (err) {
+        console.error("Get student profile controller error:", err);
+        sendResponse(res, prepareResponse(500, false, "Failed to retrieve profile", String(err?.message || err)));
+    }
+}
+
 module.exports = {
     newStudentController,
     getStudentsController,
@@ -83,4 +98,5 @@ module.exports = {
     updateStudentController,
     deleteStudentController,
     resetPasswordController,
+    getStudentProfileController,
 }

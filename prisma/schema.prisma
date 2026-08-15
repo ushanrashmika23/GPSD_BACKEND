@@ -11,7 +11,9 @@ model user {
   email      String   @unique
   gAuthID    String   @unique @default("none")
   password   String
-  jwt        String   @default("none")
+  // TEXT: JWTs can exceed VARCHAR(191). Nullable (no default) — MariaDB TEXT
+  // columns cannot carry a DEFAULT. Create paths set it explicitly ("").
+  jwt        String?  @db.Text
   lastLogin  DateTime @default(now())
   createdAt  DateTime @default(now())
   roles      String   @default("student")

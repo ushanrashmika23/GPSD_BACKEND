@@ -1,5 +1,5 @@
 const { sendResponse, prepareResponse } = require("../utils/responseEntity");
-const { newMaterial, getSignedUploadUrl, getMaterials, updateMaterial, deleteMaterial } = require("../services/material.service");
+const { newMaterial, getSignedUploadUrl, getMaterials, updateMaterial, deleteMaterial, getStudentMaterials, getMaterialSignedUrl } = require("../services/material.service");
 
 const createMaterial = async (req, res) => {
     try {
@@ -52,10 +52,40 @@ const deleteMaterialController = async (req, res) => {
     }
 };
 
+// GET /api/materials/student/:userId
+// Returns the non-expired materials accessible to the student's batch,
+// newest first.
+// Role: student (own batch materials only), staff/admin — NOT protected yet;
+// once auth middleware is applied, students must only fetch their own materials.
+const getStudentMaterialsController = async (req, res) => {
+    try {
+        const result = await getStudentMaterials(req.params.userId);
+        sendResponse(res, result);
+    } catch (error) {
+        sendResponse(res, prepareResponse(500, false, "Error fetching student materials", error?.message || error));
+    }
+};
+
+// GET /api/materials/:id/signed-url
+// Returns a short-lived signed R2 URL for viewing a material's file.
+// Role: student (own batch materials only), staff/admin — NOT protected yet;
+// once auth middleware is applied, verify the student's batch has non-expired
+// access to this material before issuing the URL.
+const getMaterialSignedUrlController = async (req, res) => {
+    try {
+        const result = await getMaterialSignedUrl(req.params.id);
+        sendResponse(res, result);
+    } catch (error) {
+        sendResponse(res, prepareResponse(500, false, "Error generating material signed URL", error?.message || error));
+    }
+};
+
 module.exports = {
     createMaterial,
     getSignedUploadUrl: getSignedUploadUrlController,
     getMaterials: getMaterialsController,
     updateMaterial: updateMaterialController,
     deleteMaterial: deleteMaterialController,
+    getStudentMaterials: getStudentMaterialsController,
+    getMaterialSignedUrl: getMaterialSignedUrlController,
 };

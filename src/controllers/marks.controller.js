@@ -83,6 +83,19 @@ const deletePaperController = async (req, res) => {
     }
 };
 
+// GET /api/marks/student-performance/:userId
+// Returns a student's released marks, per-paper ranks and summary stats.
+// Role: student (own performance), staff/admin — NOT protected yet; once auth
+// middleware is applied, students must only be able to fetch their own performance.
+const getStudentPerformanceController = async (req, res) => {
+    try {
+        const result = await marksService.getStudentPerformance(req.params.userId);
+        sendResponse(res, result);
+    } catch (error) {
+        sendResponse(res, prepareResponse(500, false, "Error fetching student performance", error?.message || error));
+    }
+};
+
 module.exports = {
     createPaperController,
     getPapersController,
@@ -93,4 +106,5 @@ module.exports = {
     togglePublishController,
     updatePaperController,
     deletePaperController,
+    getStudentPerformanceController,
 };

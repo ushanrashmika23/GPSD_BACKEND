@@ -2,7 +2,68 @@ const prisma = require("../config/prisma");
 const { prepareResponse } = require("../utils/responseEntity");
 const { auth } = require("../config/firebase.config");
 
+// ── Shared validation helpers ─────────────────────────────────────────────
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Lenient international phone: 7–20 chars of digits, spaces, +, -, ()
+const MOBILE_RE = /^[0-9+\-()\s]{7,20}$/;
+
+const NAME_MAX = 100; // first/last name, parent name
+const TEXT_MAX = 255; // address
+const SCHOOL_MAX = 150;
+const SEARCH_MAX = 100;
+const CALL_UP_NO_MAX = 50;
+const ID_MAX = 100;
+const PASSWORD_MIN = 6;
+const PASSWORD_MAX = 4096; // Firebase max password length
+
+const isText = (v, max) =>
+    typeof v === "string" && v.trim().length > 0 && v.trim().length <= max;
+
+// Optional text: empty string allowed (field will keep its current value)
+const isOptionalText = (v, max) => typeof v === "string" && v.trim().length <= max;
+
+const isEmail = (v) => typeof v === "string" && EMAIL_RE.test(v.trim());
+
+const isMobile = (v) => typeof v === "string" && MOBILE_RE.test(v.trim());
+
+const isOptionalMobile = (v) =>
+    typeof v === "string" && (v.trim() === "" || MOBILE_RE.test(v.trim()));
+
+const isPassword = (v) =>
+    typeof v === "string" && v.length >= PASSWORD_MIN && v.length <= PASSWORD_MAX;
+
+// checkFields(checks) → null when every check passes, otherwise a prepared
+// 400 response listing the failing labels. Each check is [label, boolean].
+const checkFields = (checks) => {
+    const failed = checks.filter(([, ok]) => !ok).map(([label]) => label);
+    if (failed.length > 0) {
+        return prepareResponse(400, false, `Invalid fields: ${failed.join(", ")}`);
+    }
+    return null;
+};
+
+// Friendly responses for common Prisma errors
+const prismaErrorResponse = (err, fallback) => {
+    if (err?.code === "P2002") {
+        const target = err.meta?.target;
+        const field = Array.isArray(target) ? target.join(", ") : "field";
+        return prepareResponse(
+            409,
+            false,
+            `Duplicate value for ${field}. A record with this ${field} already exists.`
+        );
+    }
+    if (err?.code === "P2003") {
+        return prepareResponse(400, false, "Referenced record does not exist (e.g. batch).");
+    }
+    if (err?.code === "P2025") {
+        return prepareResponse(404, false, "Record not found");
+    }
+    return fallback;
+};
+
 const newStudent = async (studentData) => {
+    studentData = studentData || {};
     const {
         email = "",
         password = "",
@@ -17,18 +78,52 @@ const newStudent = async (studentData) => {
         batchId = "",
     } = studentData;
 
-    // --- early validation: Firebase & DB both need these ---
-    const missing = [];
-    if (!email || !email.includes("@")) missing.push("valid email");
-    if (!password || password.length < 6) missing.push("password (min 6 characters)");
-    if (!mobile) missing.push("mobile");
-    if (!firstName) missing.push("firstName");
-    if (!lastName) missing.push("lastName");
-    if (!callUpNo) missing.push("callUpNo");
-    if (!batchId) missing.push("batchId");
+    // --- field validation: Firebase & DB both need these ---
+    const invalid = checkFields([
+        ["email address", isEmail(email)],
+        [`password (min ${PASSWORD_MIN} characters)`, isPassword(password)],
+        ["mobile number", isMobile(mobile)],
+        [`firstName (max ${NAME_MAX} characters)`, isText(firstName, NAME_MAX)],
+        [`lastName (max ${NAME_MAX} characters)`, isText(lastName, NAME_MAX)],
+        [`address (max ${TEXT_MAX} characters)`, isOptionalText(address, TEXT_MAX)],
+        [`callUpNo (max ${CALL_UP_NO_MAX} characters)`, isText(callUpNo, CALL_UP_NO_MAX)],
+        [`school (max ${SCHOOL_MAX} characters)`, isOptionalText(school, SCHOOL_MAX)],
+        [`parentName (max ${NAME_MAX} characters)`, isOptionalText(parentName, NAME_MAX)],
+        ["parentMobile number", isOptionalMobile(parentMobile)],
+        ["batchId", isText(batchId, ID_MAX)],
+    ]);
+    if (invalid) return invalid;
 
-    if (missing.length > 0) {
-        return prepareResponse(400, false, `Missing or invalid fields: ${missing.join(", ")}`);
+    // Normalize unique/display fields before creating anything
+    const data = {
+        email: email.trim(),
+        mobile: mobile.trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        address: address.trim(),
+        callUpNo: callUpNo.trim(),
+        school: school.trim(),
+        parentName: parentName.trim(),
+        parentMobile: parentMobile.trim(),
+        batchId: batchId.trim(),
+    };
+
+    // Verify the batch exists (and is active) BEFORE creating anything —
+    // avoids an FK failure after a Firebase user is already created.
+    try {
+        const batch = await prisma.batch.findUnique({
+            where: { id: data.batchId },
+            select: { is_active: true },
+        });
+        if (!batch) {
+            return prepareResponse(404, false, "Batch not found");
+        }
+        if (!batch.is_active) {
+            return prepareResponse(400, false, "Batch is inactive");
+        }
+    } catch (err) {
+        console.error("[newStudent] batch lookup failed:", err);
+        return prepareResponse(500, false, "Failed to validate batch", String(err?.message || err));
     }
 
     let firebaseUser = null;
@@ -37,15 +132,15 @@ const newStudent = async (studentData) => {
     try {
         // 1. Create user in Firebase Authentication
         firebaseUser = await auth.createUser({
-            email,
+            email: data.email,
             password,
-            displayName: `${firstName} ${lastName}`,
+            displayName: `${data.firstName} ${data.lastName}`,
         });
 
         if (!firebaseUser || !firebaseUser.uid) {
             throw new Error(
                 "Firebase createUser returned successfully but uid is missing — " +
-                JSON.stringify({ email, displayName: `${firstName} ${lastName}` })
+                JSON.stringify({ email: data.email, displayName: `${data.firstName} ${data.lastName}` })
             );
         }
         console.log("Firebase user created:", firebaseUser.uid);
@@ -53,14 +148,14 @@ const newStudent = async (studentData) => {
         // 2. Create user record directly (no transaction wrapper)
         dbUser = await prisma.user.create({
             data: {
-                email,
-                password:"pwd-not-stored", // Password is not stored in DB; Firebase handles authentication
+                email: data.email,
+                password: "pwd-not-stored", // Password is not stored in DB; Firebase handles authentication
                 jwt: "",
                 gAuthID: firebaseUser.uid,
-                mobile,
-                first_name: firstName,
-                last_name: lastName,
-                address,
+                mobile: data.mobile,
+                first_name: data.firstName,
+                last_name: data.lastName,
+                address: data.address,
             },
         });
         console.log("DB user created:", dbUser.id);
@@ -68,12 +163,12 @@ const newStudent = async (studentData) => {
         // 3. Create student record directly
         const student = await prisma.student.create({
             data: {
-                call_up_no: callUpNo,
-                school,
-                parent_name: parentName,
-                parent_mobile: parentMobile,
+                call_up_no: data.callUpNo,
+                school: data.school,
+                parent_name: data.parentName,
+                parent_mobile: data.parentMobile,
                 user_id: dbUser.id,
-                batch_id: batchId,
+                batch_id: data.batchId,
             },
         });
         console.log("DB student created:", student.call_up_no);
@@ -108,16 +203,22 @@ const newStudent = async (studentData) => {
             console.log("DB user rolled back:", dbUser.id);
         }
 
-        // --- Prisma unique-constraint violation (P2002) → friendly message ---
-        if (err?.code === "P2002") {
-            const target = err.meta?.target;
-            const field = Array.isArray(target) ? target.join(", ") : "field";
-            return prepareResponse(
-                409,
-                false,
-                `Duplicate value for ${field}. A record with this ${field} already exists.`
-            );
+        // --- Firebase createUser errors → friendly responses ---
+        const firebaseErrorMap = {
+            "auth/email-already-exists": [409, "A user with this email already exists."],
+            "auth/invalid-email": [400, "Invalid email address."],
+            "auth/invalid-password": [400, `Password must be at least ${PASSWORD_MIN} characters.`],
+            "auth/weak-password": [400, `Password must be at least ${PASSWORD_MIN} characters.`],
+            "auth/operation-not-allowed": [500, "Firebase authentication is not enabled for this project."],
+        };
+        if (err?.code && firebaseErrorMap[err.code]) {
+            const [code, msg] = firebaseErrorMap[err.code];
+            return prepareResponse(code, false, msg);
         }
+
+        // --- Prisma errors → friendly responses ---
+        const prismaResponse = prismaErrorResponse(err, null);
+        if (prismaResponse) return prismaResponse;
 
         const message =
             phase === "firebase-createUser"
@@ -128,112 +229,134 @@ const newStudent = async (studentData) => {
     }
 }
 
-//list all students paginated
-const getStudents = async ({
-    page = 1,
-    limit = 10,
-    search = "",
-    batch_id = "",
-}) => {
-    page = Number(page);
-    limit = Number(limit);
+// list all students paginated
+const getStudents = async ({ page = 1, limit = 10, search = "", batch_id = "" } = {}) => {
+    try {
+        // --- validate pagination & filters ---
+        page = Number(page);
+        limit = Number(limit);
+        if (!Number.isInteger(page) || page < 1) {
+            return prepareResponse(400, false, "page must be a positive integer");
+        }
+        // Admin screens legitimately fetch "all rows" with large limits
+        // (MarksPage uses 500 per batch and 9999 for counts), so allow up to
+        // 10000 — still bounded, but those calls no longer 400.
+        if (!Number.isInteger(limit) || limit < 1 || limit > 10000) {
+            return prepareResponse(400, false, "limit must be an integer between 1 and 10000");
+        }
+        if (typeof search !== "string" || search.trim().length > SEARCH_MAX) {
+            return prepareResponse(400, false, `search must be a string up to ${SEARCH_MAX} characters`);
+        }
+        if (typeof batch_id !== "string") {
+            return prepareResponse(400, false, "batch_id must be a string");
+        }
+        search = search.trim();
+        batch_id = batch_id.trim();
 
-    const skip = (page - 1) * limit;
+        const skip = (page - 1) * limit;
 
-    // Build filter dynamically
-    const where = {};
-    const conditions = [];
+        // Build filter dynamically
+        const where = {};
+        const conditions = [];
 
-    if (batch_id) {
-        conditions.push({ batch_id });
-    }
+        if (batch_id) {
+            conditions.push({ batch_id });
+        }
 
-    if (search) {
-        conditions.push({
-            OR: [
-                {
-                    call_up_no: {
-                        contains: search,
-                    },
-                },
-                {
-                    school: {
-                        contains: search,
-                    },
-                },
-                {
-                    user: {
-                        first_name: {
+        if (search) {
+            conditions.push({
+                OR: [
+                    {
+                        call_up_no: {
                             contains: search,
                         },
                     },
-                },
-                {
-                    user: {
-                        last_name: {
+                    {
+                        school: {
                             contains: search,
                         },
                     },
-                },
-                {
-                    user: {
-                        email: {
-                            contains: search,
+                    {
+                        user: {
+                            first_name: {
+                                contains: search,
+                            },
                         },
                     },
-                },
-                {
-                    user: {
-                        mobile: {
-                            contains: search,
+                    {
+                        user: {
+                            last_name: {
+                                contains: search,
+                            },
                         },
                     },
+                    {
+                        user: {
+                            email: {
+                                contains: search,
+                            },
+                        },
+                    },
+                    {
+                        user: {
+                            mobile: {
+                                contains: search,
+                            },
+                        },
+                    },
+                ],
+            });
+        }
+
+        if (conditions.length > 0) {
+            where.AND = conditions;
+        }
+
+        // Run queries in parallel
+        const [students, total] = await Promise.all([
+            prisma.student.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: {
+                    user: {
+                        createdAt: "desc",
+                    },
                 },
-            ],
+                include: {
+                    user: true,
+                    batch: true, // Optional. Remove if batch details are not needed.
+                },
+            }),
+            prisma.student.count({
+                where,
+            }),
+        ]);
+
+        return prepareResponse(200, true, "Students retrieved successfully", {
+            data: students,
+            meta: {
+                page,
+                limit,
+                total,
+                pages: Math.ceil(total / limit),
+                hasNext: skip + students.length < total,
+                hasPrevious: page > 1,
+            },
         });
+    } catch (error) {
+        console.error("Get students error:", error);
+        return prepareResponse(500, false, "Failed to retrieve students", String(error?.message || error));
     }
-
-    if (conditions.length > 0) {
-        where.AND = conditions;
-    }
-
-    // Run queries in parallel
-    const [students, total] = await Promise.all([
-        prisma.student.findMany({
-            where,
-            skip,
-            take: limit,
-            orderBy: {
-                user: {
-                    createdAt: "desc",
-                },
-            },
-            include: {
-                user: true,
-                batch: true, // Optional. Remove if batch details are not needed.
-            },
-        }),
-        prisma.student.count({
-            where,
-        }),
-    ]);
-
-    return prepareResponse(200, true, "Students retrieved successfully", {
-        data: students,
-        meta: {
-            page,
-            limit,
-            total,
-            pages: Math.ceil(total / limit),
-            hasNext: skip + students.length < total,
-            hasPrevious: page > 1,
-        },
-    });
 };
-
 
 const getStudentById = async (studentId) => {
     try {
+        if (!studentId || typeof studentId !== "string" || !studentId.trim()) {
+            return prepareResponse(400, false, "call_up_no is required");
+        }
+        studentId = studentId.trim();
+
         const student = await prisma.student.findUnique({
             where: { call_up_no: studentId },
             include: {
@@ -255,20 +378,53 @@ const getStudentById = async (studentId) => {
 };
 
 const updateStudent = async (studentId, studentData) => {
-    const {
-        mobile = "",
-        firstName = "",
-        lastName = "",
-        address = "",
-        callUpNo = "",
-        school = "",
-        parentName = "",
-        parentMobile = "",
-        batchId = "",
-        isActive,
-    } = studentData;
-
     try {
+        if (!studentId || typeof studentId !== "string" || !studentId.trim()) {
+            return prepareResponse(400, false, "call_up_no is required");
+        }
+        studentId = studentId.trim();
+
+        studentData = studentData || {};
+        const {
+            mobile = "",
+            firstName = "",
+            lastName = "",
+            address = "",
+            callUpNo = "",
+            school = "",
+            parentName = "",
+            parentMobile = "",
+            batchId = "",
+            isActive,
+        } = studentData;
+
+        // Only validate fields the caller actually provided (empty = unchanged)
+        const invalid = checkFields([
+            ["mobile number", isOptionalMobile(mobile)],
+            [`firstName (max ${NAME_MAX} characters)`, isOptionalText(firstName, NAME_MAX)],
+            [`lastName (max ${NAME_MAX} characters)`, isOptionalText(lastName, NAME_MAX)],
+            [`address (max ${TEXT_MAX} characters)`, isOptionalText(address, TEXT_MAX)],
+            [`callUpNo (max ${CALL_UP_NO_MAX} characters)`, isOptionalText(callUpNo, CALL_UP_NO_MAX)],
+            [`school (max ${SCHOOL_MAX} characters)`, isOptionalText(school, SCHOOL_MAX)],
+            [`parentName (max ${NAME_MAX} characters)`, isOptionalText(parentName, NAME_MAX)],
+            ["parentMobile number", isOptionalMobile(parentMobile)],
+            ["batchId", isOptionalText(batchId, ID_MAX)],
+            ["isActive (must be true or false)", typeof isActive === "undefined" || typeof isActive === "boolean"],
+        ]);
+        if (invalid) return invalid;
+
+        const updates = {
+            mobile: mobile.trim(),
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            address: address.trim(),
+            callUpNo: callUpNo.trim(),
+            school: school.trim(),
+            parentName: parentName.trim(),
+            parentMobile: parentMobile.trim(),
+            batchId: batchId.trim(),
+        };
+
         const existing = await prisma.student.findUnique({
             where: { call_up_no: studentId },
             include: { user: true },
@@ -277,13 +433,27 @@ const updateStudent = async (studentId, studentData) => {
             return prepareResponse(404, false, "Student not found");
         }
 
+        // Verify the new batch exists (and is active) when it changes
+        if (updates.batchId && updates.batchId !== existing.batch_id) {
+            const batch = await prisma.batch.findUnique({
+                where: { id: updates.batchId },
+                select: { is_active: true },
+            });
+            if (!batch) {
+                return prepareResponse(404, false, "Batch not found");
+            }
+            if (!batch.is_active) {
+                return prepareResponse(400, false, "Batch is inactive");
+            }
+        }
+
         const result = await prisma.$transaction(async (tx) => {
             // Update user record
             const userData = {
-                mobile: mobile || existing.user.mobile,
-                first_name: firstName || existing.user.first_name,
-                last_name: lastName || existing.user.last_name,
-                address: address || existing.user.address,
+                mobile: updates.mobile || existing.user.mobile,
+                first_name: updates.firstName || existing.user.first_name,
+                last_name: updates.lastName || existing.user.last_name,
+                address: updates.address || existing.user.address,
             };
             // Only include is_active if explicitly provided
             if (typeof isActive === "boolean") {
@@ -298,11 +468,11 @@ const updateStudent = async (studentId, studentData) => {
             const student = await tx.student.update({
                 where: { call_up_no: studentId },
                 data: {
-                    call_up_no: callUpNo || existing.call_up_no,
-                    school: school || existing.school,
-                    parent_name: parentName || existing.parent_name,
-                    parent_mobile: parentMobile || existing.parent_mobile,
-                    batch_id: batchId || existing.batch_id,
+                    call_up_no: updates.callUpNo || existing.call_up_no,
+                    school: updates.school || existing.school,
+                    parent_name: updates.parentName || existing.parent_name,
+                    parent_mobile: updates.parentMobile || existing.parent_mobile,
+                    batch_id: updates.batchId || existing.batch_id,
                 },
             });
 
@@ -312,12 +482,20 @@ const updateStudent = async (studentId, studentData) => {
         return prepareResponse(200, true, "Student updated successfully", result);
     } catch (err) {
         console.error("Update student error:", err);
-        return prepareResponse(500, false, "Failed to update student", String(err?.message || err));
+        return prismaErrorResponse(
+            err,
+            prepareResponse(500, false, "Failed to update student", String(err?.message || err))
+        );
     }
 };
 
 const deleteStudent = async (studentId) => {
     try {
+        if (!studentId || typeof studentId !== "string" || !studentId.trim()) {
+            return prepareResponse(400, false, "call_up_no is required");
+        }
+        studentId = studentId.trim();
+
         const existing = await prisma.student.findUnique({
             where: { call_up_no: studentId },
             include: { user: true },
@@ -347,12 +525,26 @@ const deleteStudent = async (studentId) => {
         return prepareResponse(200, true, "Student deleted successfully");
     } catch (err) {
         console.error("Delete student error:", err);
+        if (err?.code === "P2003") {
+            return prepareResponse(409, false, "Cannot delete: related records still exist");
+        }
+        if (err?.code === "P2025") {
+            return prepareResponse(404, false, "Student not found");
+        }
         return prepareResponse(500, false, "Failed to delete student", String(err?.message || err));
     }
 };
 
 const resetStudentPassword = async (callUpNo, newPassword) => {
     try {
+        if (!callUpNo || typeof callUpNo !== "string" || !callUpNo.trim()) {
+            return prepareResponse(400, false, "call_up_no is required");
+        }
+        if (!isPassword(newPassword)) {
+            return prepareResponse(400, false, `newPassword must be at least ${PASSWORD_MIN} characters`);
+        }
+        callUpNo = callUpNo.trim();
+
         // Find student with user record to get gAuthID (Firebase UID)
         const student = await prisma.student.findUnique({
             where: { call_up_no: callUpNo },
@@ -371,7 +563,68 @@ const resetStudentPassword = async (callUpNo, newPassword) => {
         return prepareResponse(200, true, "Password reset successfully");
     } catch (err) {
         console.error("Reset student password error:", err);
+        if (err?.code === "auth/user-not-found") {
+            return prepareResponse(404, false, "Firebase account not found for this student");
+        }
+        if (err?.code === "auth/weak-password" || err?.code === "auth/invalid-password") {
+            return prepareResponse(400, false, `Password must be at least ${PASSWORD_MIN} characters`);
+        }
         return prepareResponse(500, false, "Failed to reset password", String(err?.message || err));
+    }
+};
+
+// Get a student's own profile (user + student + class/batch details) by the
+// logged-in USER id from the JWT — the student portal login response only
+// carries user.id, not call_up_no.
+// Role: student (own profile only), staff/admin.
+// NOT protected yet — when auth middleware is wired up, students must be
+// restricted to their own userId (JWT id === :userId).
+const getStudentProfileByUserId = async (userId) => {
+    try {
+        if (!userId || typeof userId !== "string" || !userId.trim()) {
+            return prepareResponse(400, false, "userId is required");
+        }
+        userId = userId.trim();
+
+        const student = await prisma.student.findUnique({
+            where: { user_id: userId },
+            select: {
+                call_up_no: true,
+                school: true,
+                parent_name: true,
+                parent_mobile: true,
+                batch_id: true,
+                // Sensitive fields (password, jwt, gAuthID) are excluded
+                user: {
+                    select: {
+                        id: true,
+                        email: true,
+                        roles: true,
+                        mobile: true,
+                        first_name: true,
+                        last_name: true,
+                        address: true,
+                        is_active: true,
+                    },
+                },
+                batch: {
+                    select: {
+                        id: true,
+                        name: true,
+                        day: true,
+                        start_time: true,
+                        end_time: true,
+                    },
+                },
+            },
+        });
+        if (!student) {
+            return prepareResponse(404, false, "Student profile not found");
+        }
+        return prepareResponse(200, true, "Student profile retrieved successfully", student);
+    } catch (error) {
+        console.error("Get student profile error:", error);
+        return prepareResponse(500, false, "Failed to retrieve profile", String(error?.message || error));
     }
 };
 
@@ -382,4 +635,5 @@ module.exports = {
     updateStudent,
     deleteStudent,
     resetStudentPassword,
-}
+    getStudentProfileByUserId,
+};

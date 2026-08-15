@@ -6,6 +6,7 @@ const prisma = require("../config/prisma");
  * Uses the `new Date(year, month, date)` constructor which always produces
  * midnight in the local timezone — no string parsing, no UTC conversion.
  */
+
 const getDayBoundaries = (d) => {
     const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);

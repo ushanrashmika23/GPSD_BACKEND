@@ -178,10 +178,112 @@ const deleteMaterial = async (materialId) => {
     }
 };
 
+// Get all NON-EXPIRED materials accessible to the logged-in student's batch,
+// newest first. "Newest" = when access was granted to the batch
+// (material_access.created_at) — the material table has no created_at column.
+// Role: student (own batch materials only), staff/admin.
+// NOT protected yet — when auth middleware is wired up, students must be
+// restricted to their own userId (JWT id === :userId).
+const getStudentMaterials = async (userId) => {
+    try {
+        if (!userId || typeof userId !== "string" || !userId.trim()) {
+            return prepareResponse(400, false, "userId is required");
+        }
+        userId = userId.trim();
+
+        // 1. Find the student's batch
+        const student = await prisma.student.findUnique({
+            where: { user_id: userId },
+            select: { call_up_no: true, batch_id: true },
+        });
+        if (!student) {
+            return prepareResponse(404, false, "Student not found");
+        }
+
+        // 2. Active access rows for the student's batch (expired access
+        //    excluded), newest access first
+        const accesses = await prisma.material_access.findMany({
+            where: {
+                batch_id: student.batch_id,
+                expiry_date: { gte: new Date() },
+            },
+            include: {
+                material: {
+                    include: {
+                        lesson: { select: { id: true, title: true, type: true } },
+                    },
+                },
+            },
+            orderBy: { created_at: "desc" },
+        });
+
+        const materials = accesses.map((a) => ({
+            material_id: a.material.id,
+            material_name: a.material.title,
+            description: a.material.description,
+            type: a.material.type, // "DOCUMENT" | "VIDEO" (admin upload types)
+            lesson_id: a.material.lesson_id,
+            lesson_title: a.material.lesson?.title ?? "General",
+            lesson_type: a.material.lesson?.type ?? null,
+            material_url: a.material.material_url, // R2 object key
+            date_added: a.created_at, // when access was granted to this batch
+            expiry_date: a.expiry_date,
+        }));
+
+        return prepareResponse(200, true, "Student materials fetched successfully", {
+            batch_id: student.batch_id,
+            total: materials.length,
+            materials,
+        });
+    } catch (e) {
+        console.error("Get student materials error:", e);
+        return prepareResponse(500, false, "Error fetching student materials", e?.message || e);
+    }
+};
+
+// Generate a short-lived signed URL for VIEWING a material's file from R2
+// (the DB only stores the object key, not a public URL). Used by the student
+// PDF viewer and video player.
+// Role: student (own batch materials only), staff/admin.
+// NOT protected yet — when auth middleware is wired up, students must only be
+// able to fetch signed URLs for materials their batch still has valid access to.
+const getMaterialSignedUrl = async (materialId) => {
+    try {
+        if (!materialId || typeof materialId !== "string" || !materialId.trim()) {
+            return prepareResponse(400, false, "materialId is required");
+        }
+        materialId = materialId.trim();
+
+        const material = await prisma.material.findUnique({
+            where: { id: materialId },
+            select: { material_url: true, type: true },
+        });
+        if (!material) {
+            return prepareResponse(404, false, "Material not found");
+        }
+
+        const command = new GetObjectCommand({
+            Bucket: process.env.R2_BUCKET,
+            Key: material.material_url,
+        });
+        const signedUrl = await getSignedUrl(r2, command, { expiresIn: 3600 });
+
+        return prepareResponse(200, true, "Material signed URL generated successfully", {
+            url: signedUrl,
+            type: material.type,
+        });
+    } catch (e) {
+        console.error("Get material signed url error:", e);
+        return prepareResponse(500, false, "Error generating material signed URL", e?.message || e);
+    }
+};
+
 module.exports = {
     newMaterial,
     getSignedUploadUrl,
     getMaterials,
     updateMaterial,
     deleteMaterial,
+    getStudentMaterials,
+    getMaterialSignedUrl,
 }

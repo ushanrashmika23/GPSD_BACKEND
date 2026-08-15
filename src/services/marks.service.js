@@ -53,8 +53,17 @@ const newMark = async (data) => {
 const updateMark = async (data) => {
     const { call_up_no, paper_id, mark, comment } = data;
     try {
+        // The schema has no compound unique on (call_up_no, paper_id) — only
+        // plain indexes — so the Prisma client exposes no `call_up_no_paper_id`
+        // where input. Find the row first, then update by its primary id.
+        const existing = await prisma.student_marks.findFirst({
+            where: { call_up_no, paper_id },
+        });
+        if (!existing) {
+            return prepareResponse(404, false, "Mark not found", null);
+        }
         const updatedMark = await prisma.student_marks.update({
-            where: { call_up_no_paper_id: { call_up_no, paper_id } },
+            where: { id: existing.id },
             data: { marks: mark, comments: comment ?? "none" }
         });
         return prepareResponse(200, true, "Mark updated successfully", updatedMark);
@@ -173,6 +182,123 @@ const deletePaper = async (paperId) => {
     }
 };
 
+// Get a student's performance data (released marks, per-paper ranks, summary
+// stats) by the logged-in USER id — the student portal login only carries
+// user.id, not call_up_no.
+// Role: student (own performance only), staff/admin.
+// NOT protected yet — when auth middleware is wired up, students must be
+// restricted to their own userId (JWT id === :userId).
+const getStudentPerformance = async (userId) => {
+    try {
+        if (!userId || typeof userId !== "string" || !userId.trim()) {
+            return prepareResponse(400, false, "userId is required");
+        }
+        userId = userId.trim();
+
+        // 1. Find the student by user id (call_up_no + batch needed below)
+        const student = await prisma.student.findUnique({
+            where: { user_id: userId },
+            select: { call_up_no: true, batch_id: true },
+        });
+        if (!student) {
+            return prepareResponse(404, false, "Student not found");
+        }
+
+        // 2. This student's marks on RELEASED papers only, oldest → newest
+        const myMarks = await prisma.student_marks.findMany({
+            where: {
+                call_up_no: student.call_up_no,
+                paper: { is_mark_released: true },
+            },
+            include: {
+                paper: {
+                    include: {
+                        material: {
+                            include: { lesson: true },
+                        },
+                    },
+                },
+            },
+            orderBy: { paper: { paper_date: "asc" } },
+        });
+
+        // 3. All marks on those papers (the whole class) to compute ranks
+        //    and real class averages (paper.avg_marks is not maintained by
+        //    the admin flow, so it is computed here from live marks).
+        const paperIds = myMarks.map((m) => m.paper_id);
+        const classMarks = paperIds.length
+            ? await prisma.student_marks.findMany({
+                  where: { paper_id: { in: paperIds } },
+                  select: { paper_id: true, marks: true },
+              })
+            : [];
+
+        // Rank = position of the mark in the desc-sorted class list
+        // (ties share the same rank, e.g. two tops both rank #1)
+        const ranksByPaper = new Map();
+        const classAvgByPaper = new Map();
+        for (const paperId of paperIds) {
+            const marks = classMarks
+                .filter((m) => m.paper_id === paperId)
+                .map((m) => m.marks)
+                .sort((a, b) => b - a);
+            if (marks.length === 0) continue;
+
+            const rankForValue = new Map();
+            marks.forEach((value, i) => {
+                if (!rankForValue.has(value)) rankForValue.set(value, i + 1);
+            });
+            ranksByPaper.set(paperId, rankForValue);
+
+            const avg = marks.reduce((s, v) => s + v, 0) / marks.length;
+            classAvgByPaper.set(paperId, Math.round(avg * 10) / 10);
+        }
+
+        // 4. Per-paper rows for the frontend (charts + results list)
+        const papers = myMarks.map((m) => ({
+            paper_id: m.paper_id,
+            paper_name: m.paper.paper_name,
+            paper_date: m.paper.paper_date,
+            class_avg: classAvgByPaper.get(m.paper_id) ?? null,
+            is_mark_released: m.paper.is_mark_released,
+            lesson_id: m.paper.material?.lesson?.id ?? null,
+            lesson_title: m.paper.material?.lesson?.title ?? "General",
+            lesson_type: m.paper.material?.lesson?.type ?? null,
+            mark: m.marks,
+            rank: ranksByPaper.get(m.paper_id)?.get(m.marks) ?? null,
+            comments: m.comments ?? "none",
+        }));
+
+        // 5. Summary stats (papers are ordered oldest → newest)
+        let currentRank = null;
+        let latestMark = null;
+        let bestRank = null;
+        let averageMark = null;
+
+        if (papers.length > 0) {
+            currentRank = papers[papers.length - 1].rank;
+            latestMark = papers[papers.length - 1].mark;
+            bestRank = Math.min(...papers.map((p) => p.rank).filter((r) => r != null));
+            averageMark = Math.round((papers.reduce((s, p) => s + p.mark, 0) / papers.length) * 10) / 10;
+        }
+
+        const classSize = await prisma.student.count({
+            where: { batch_id: student.batch_id },
+        });
+
+        return prepareResponse(200, true, "Student performance retrieved successfully", {
+            call_up_no: student.call_up_no,
+            batch_id: student.batch_id,
+            classSize,
+            papers,
+            summary: { currentRank, bestRank, averageMark, latestMark },
+        });
+    } catch (err) {
+        console.error("Get student performance error:", err);
+        return prepareResponse(500, false, "Error fetching student performance", err?.message || err);
+    }
+};
+
 module.exports = {
     newPaper,
     getPapers,
@@ -183,4 +309,5 @@ module.exports = {
     toglePublishMark,
     updatePaper,
     deletePaper,
+    getStudentPerformance,
 };
